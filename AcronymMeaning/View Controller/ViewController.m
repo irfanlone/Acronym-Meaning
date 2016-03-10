@@ -41,7 +41,16 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
     AFURLSessionManager *manager = [[AFURLSessionManager alloc] initWithSessionConfiguration:configuration];
 
     NSURLSessionDataTask *dataTask = [manager dataTaskWithRequest:request completionHandler:^(NSURLResponse * _Nonnull response, id  _Nullable responseObject, NSError * _Nullable error) {
-                
+        
+        NSInteger statusCode = [[[error userInfo] objectForKey:AFNetworkingOperationFailingURLResponseErrorKey] statusCode];
+        if (statusCode < 200 || statusCode >= 299) {
+            [self alertUserWithMessage:@"Network error"];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [MBProgressHUD hideHUDForView:self.view animated:YES];
+            });
+            return;
+        }
+        
         NSArray * responseData = nil;
         if (responseObject) {
             responseData = (NSArray*)responseObject;
@@ -52,7 +61,7 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
             NSData *errorData = error.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey];
             responseData = [NSJSONSerialization JSONObjectWithData: errorData options:kNilOptions error:nil];
         }
-        
+
         if (responseData) {
             self.results = [self processResponseData:responseData];
         }
@@ -69,12 +78,11 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
 }
 
 - (IBAction)searchButtonPressed:(id)sender {
-    
+    [self resignFirstResponder];
     if (self.acronymSearchTextField.text.length == 0) {
         [self alertUserWithMessage:@"Enter a value for acronym"];
         return;
     }
-    
     [MBProgressHUD showHUDAddedTo:self.view animated:YES];
     NSString * acronymValue = self.acronymSearchTextField.text;
     [self getMeaningForAcronym:acronymValue];
@@ -91,8 +99,8 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
     return results;
 }
 
-    - (void)alertUserWithMessage:(NSString*)ALertMessage {
-    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:ALertMessage message:@"Please try again" preferredStyle:UIAlertControllerStyleAlert];
+- (void)alertUserWithMessage:(NSString*)alertMessage {
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:alertMessage message:@"Please try again" preferredStyle:UIAlertControllerStyleAlert];
     UIAlertAction* ok = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil];
     [alertController addAction:ok];
     [self presentViewController:alertController animated:YES completion:nil];
@@ -117,10 +125,6 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
     AcronymTableViewCell * cell = [tableView dequeueReusableCellWithIdentifier:reuseIdentifier forIndexPath:indexPath];
     cell.acronymMeaningLabel.text = self.results[indexPath.row];
     return cell;
-}
-
--(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
-    return UITableViewAutomaticDimension;
 }
 
 #pragma mark UITableViewDelegate
