@@ -14,7 +14,7 @@
 static NSInteger kDefaultTableviewRowHeight = 44.0;
 NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/dictionary.py";
 
-@interface ViewController ()
+@interface ViewController () <UITextFieldDelegate>
 @property (strong, nonatomic) IBOutlet UITableView *tableView;
 @property (strong, nonatomic) IBOutlet UITextField *acronymSearchTextField;
 @property (nonatomic, strong) NSMutableArray * results;
@@ -33,36 +33,25 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
 - (void)getMeaningForAcronym:(NSString*)acronym {
     
     self.results = [NSMutableArray array];
-    
     NSDictionary *parameters = @{@"sf": acronym};
     NSURLRequest *request = [[AFHTTPRequestSerializer serializer] requestWithMethod:@"GET" URLString:URLString parameters:parameters error:nil];
 
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
     AFURLSessionManager *manager = [[AFURLSessionManager alloc] initWithSessionConfiguration:configuration];
-
+    manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+    
     NSURLSessionDataTask *dataTask = [manager dataTaskWithRequest:request completionHandler:^(NSURLResponse * _Nonnull response, id  _Nullable responseObject, NSError * _Nullable error) {
         
-        NSInteger statusCode = [[[error userInfo] objectForKey:AFNetworkingOperationFailingURLResponseErrorKey] statusCode];
-        if (statusCode < 200 || statusCode >= 299) {
-            [self alertUserWithMessage:@"Network error"];
+        if (error) {
+            [self alertUserWithMessage:@"Request Failed"];
             dispatch_async(dispatch_get_main_queue(), ^{
                 [MBProgressHUD hideHUDForView:self.view animated:YES];
             });
             return;
         }
-        
-        NSArray * responseData = nil;
-        if (responseObject) {
-            responseData = (NSArray*)responseObject;
-        } else {
-            // The responseObject comes back nil, Reason:"Content-Type" = "text/plain" instead of "application/json" in the response
-            // and AFNetworking treats this as an error, so that's using error.userInfo to get the the response data.
-            // The issue has been discussed here https://github.com/AFNetworking/AFNetworking/issues/2410
-            NSData *errorData = error.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey];
-            responseData = [NSJSONSerialization JSONObjectWithData: errorData options:kNilOptions error:nil];
-        }
-
-        if (responseData) {
+        NSError * err = nil;
+        NSArray * responseData = [NSJSONSerialization JSONObjectWithData:responseObject options:kNilOptions error:&err];
+        if (!err && responseData) {
             self.results = [self processResponseData:responseData];
         }
         
@@ -78,7 +67,9 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
 }
 
 - (IBAction)searchButtonPressed:(id)sender {
-    [self resignFirstResponder];
+    if ([self.acronymSearchTextField isFirstResponder]) {
+        [self.acronymSearchTextField resignFirstResponder];
+    }
     if (self.acronymSearchTextField.text.length == 0) {
         [self alertUserWithMessage:@"Enter a value for acronym"];
         return;
@@ -89,7 +80,6 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
 }
 
 - (NSMutableArray *)processResponseData:(NSArray*)serializedData {
-    
     NSMutableArray * results = [NSMutableArray array];
     NSArray * lfs = [[serializedData valueForKey:@"lfs"] firstObject];
     for (NSDictionary * dict in lfs) {
@@ -131,6 +121,14 @@ NSString * const URLString = @"http://www.nactem.ac.uk/software/acromine/diction
 
 -(void) tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+}
+
+#pragma mark UITextFieldDelegate
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [textField resignFirstResponder];
+    [self searchButtonPressed:nil];
+    return NO;
 }
 
 @end

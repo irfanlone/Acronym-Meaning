@@ -1,3 +1,6 @@
+## Cocoa Pods dir
+Pods/
+
 build/
 *.pbxuser
 *.mode1v3
